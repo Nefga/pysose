@@ -1,5 +1,5 @@
 """
-Práctica 0: Mecánica pulmonar
+Práctica 4: Sistema Endocrino 
 
 Departamento de Ingeniería Eléctrica y Electrónica, Ingeniería Biomédica
 Tecnológico Nacional de México [TecNM - Tijuana]
@@ -34,79 +34,74 @@ Docente: Dr. Paul Antonio Valle Trujillo; paul.valle@tectijuana.edu.mx
 
 
 # Respuesta del sistema en lazo abierto y en lazo cerrado
-
-#Librerías
 import numpy as np
 import math as m
 import control as ctrl
 import matplotlib.pyplot as plt
 
-#Datos Generales de la Simulacion
-x0,t0,tend,dt,w,h = 0,0,10,1E-3,7,3.5
+# Datos generales de la simulación
+x0,t0,tend,dt,w,h = 0,0,10,1E-3,10,5
 N = round(tend/dt) + 1
 t = np.linspace(t0,tend,N)
-u1 = np.ones(N)
-u2 = np.zeros(N); u2[round(1/dt):round(2/dt)] = 1
-u3 = t/tend
-u4 = np.sin(m.pi/2*t)
-u = np.column_stack((u1,u2,u3,u4))
-signals = ['step','impulse','ramp','sinusoidal']
+u = np.ones(N)
 
-#Componentes Circuito RLC
-R,L,C = 2.2E3, 15E-6, 220E-6
-num = [C*L*R, C*R**2+L, R]
-den = [3*C*L*R, 5*C*R**+L, 2*R]
-sys = ctrl.tf(num,den)
-print(f"Función de transferencia: {sys}\n")
-# Polos del sistema
-L= np.roots(den)
-print(f"Polos del sistema: L1={L[0]:.3e},L2={L[1]:.3e}\n")
-#Componentes del controlador
-kI = 851.3046
-Cr= 1E-6
-Re= 1/(Cr*kI)
-numPID=[1]
-denPID=[Re*Cr,0]
-PID=ctrl.tf(numPID,denPID)
-print(f"Capacitancia Cr:{Cr} Faradios\n")
-print(f"Resistencia Re:{Re:.3e}Ohms\n")
-print(f"Función de transferencia del controlador: {PID}\n")
-#Sistema de control en lazo cerrado
-sysPID=ctrl.feedback(ctrl.series(PID,sys),1,sign=-1)
-print(f"Fución de transferencia en lazo cerrado_{sysPID}\n")
-#colores
-ctrl1 = np.array([0, 125, 204])/255
-ctrl2 = np.array([235,185,0])/255
-ctrl3 = np.array([209,0,86])/255
+def sis(C, R2, nombre):
+    R1, L = 1E3,100E-3
+    num = [L, R2]
+    den = [C*L*R1,C*R1*R2+L,R1+R2]
+    sys = ctrl.tf(num, den)
+    print(f"Función de transferencia {nombre}: {sys}\n")
+    return sys
 
-# Funciones de sistema en lazo abierto y lazo cerrado
+sysControl = sis(1E-6, 100E3, "Control")
+sysCaso = sis(1000E-6, 1E3,"Caso")
+
+# Componentes del controlador
+kP,kI,kD = 13209.9564,32316525.9285,0.18118
+Cr = 1E-6
+Re = 1/(Cr*kI)
+Rr = kP*Re
+Ce = kD/Rr
+numPID = [Re*Rr*Ce*Cr,Re*Ce+Rr*Cr,1]
+denPID = [Re*Cr,0]
+PID = ctrl.tf(numPID,denPID)
+
+# Sistema de control en lazo cerrado
+sysPID = ctrl.feedback(ctrl.series(PID,sysCaso),1,sign = -1)
+print(f"Función de transferencia en lazo cerrado: {sysPID}\n")
+
+#Colores
+clr1 = np.array([97,45,83])/255
+clr2 = np.array([255,190,145])/255
+clr3 = np.array([44,87,69])/255
+clr4 = np.array([45,100,200])/255
+
+# Funciones del sistema en lazo abierto y lazo cerrado
 def openloop(t,sys,u):
-    _,PAu = ctrl.forced_response(sys,t,u,x0)
-    return PAu
+    _,Vs = ctrl.forced_response(sys,t,u,x0)
+    return Vs
 
-def closedloop(t,sysPID,u):
-    _,PIDu = ctrl.forced_response(sysPID,t,u,x0)
-    return PIDu
+def closedloop(t,sys,u):
+    _,tratamientoPID = ctrl.forced_response(sys,t,u,x0)
+    return tratamientoPID
 
-# Respuestas: Simulacion numericas
-for i in range(0,4):
-    Pau = openloop(t,sys,u[:,i])
-    PIDu = closedloop(t,sysPID,u[:,i])
-    fg = plt.figure(i+1)
-    fg.set_size_inches(w,h)
-    plt.rcParams['font.size'] = 11
-    plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.serif'] = 'Times New Roman'
-    plt.plot(t,u[:,i],'-',color=ctrl1,label='Pao(t)')
-    plt.plot(t,Pau,'--',color=ctrl2,label='PA(t)')
-    plt.plot(t,PIDu,':',linewidth=2.5,color=ctrl3,label='PID(t)')
-    plt.xlim(0,10); plt.xticks(np.arange(0,11,1))
-    if i == 0 or i == 1 or i == 2:
-        plt.ylim(-0.1,1.2); plt.yticks(np.arange(-0.1,1.3,0.1))
-    elif i == 3:
-        plt.ylim(-1.2,1.2); plt.yticks(np.arange(-1.2,1.4,0.2))
+#Respuestas: Simulaciones numéricas
+Control = openloop(t,sysControl,u)
+Caso = openloop(t,sysCaso,u)
+Tratamiento = closedloop(t,sysPID,Control)
+fg = plt.figure()
+fg.set_size_inches(w,h)
+plt.rcParams['font.size'] = 11
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = ['Times New Roman']
+plt.plot(t,u,'-',linewidth=1.5,color=clr1,label='Ve(t)')
+plt.plot(t,Control,'-',linewidth=1.5,color=clr2,label='Vs(t): Control')
+plt.plot(t,Caso,'-',linewidth=1.5,color=clr3,label='Vs(t): Caso')
+plt.plot(t,Tratamiento,'--',linewidth=1.5,color=clr4,label='PID(t)')
+plt.xlim(0,10); plt.xticks(np.arange(0,11,1))
+plt.ylim(-0.1,1.2); plt.yticks(np.arange(-0.1,1.3,0.1))
 plt.xlabel('t [s]')
-plt.ylabel('Vi(t) [V]')
-plt.legend (bbox_to_anchor=(0.5,-0.25),loc='center',ncol=3,frameon=False)
+plt.ylabel('Ve(t) [V]')
+plt.legend(bbox_to_anchor=(0.5,-0.25),loc='center',ncol=4,frameon=False)
 plt.show()
-fg.savefig(f"{signals[i]}_python.pdf", bbox_inches='tight')
+fg.savefig('Control_caso_python4.pdf',bbox_inches='tight')
